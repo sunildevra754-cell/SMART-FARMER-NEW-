@@ -15,7 +15,10 @@ import {
   Filter,
   ArrowRight,
   Volume2,
-  Mic
+  Mic,
+  Star,
+  BadgeCheck,
+  SlidersHorizontal
 } from 'lucide-react';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
@@ -35,6 +38,15 @@ const Marketplace: React.FC<MarketplaceProps> = ({ onBack, onToggleVoiceAssistan
   const [showAddForm, setShowAddForm] = useState(false);
   const [viewMode, setViewMode] = useState<'buyer' | 'seller'>('buyer');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState({
+    cropType: '',
+    location: '',
+    minPrice: '',
+    maxPrice: '',
+    minRating: 0,
+  });
+  const [selectedSeller, setSelectedSeller] = useState<{ id: string, name: string, rating: number, verified: boolean } | null>(null);
   const [isSpeaking, setIsSpeaking] = useState<string | null>(null);
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const [newListing, setNewListing] = useState({
@@ -115,6 +127,8 @@ const Marketplace: React.FC<MarketplaceProps> = ({ onBack, onToggleVoiceAssistan
         price: parseFloat(newListing.price),
         sellerId: auth.currentUser.uid,
         sellerName: auth.currentUser.displayName || 'Farmer',
+        sellerRating: 4.8, // Default mock rating
+        isVerifiedSeller: true, // Default mock verification
         createdAt: serverTimestamp(),
       });
       setShowAddForm(false);
@@ -130,8 +144,18 @@ const Marketplace: React.FC<MarketplaceProps> = ({ onBack, onToggleVoiceAssistan
     const matchesView = viewMode === 'buyer' 
       ? (!auth.currentUser || l.sellerId !== auth.currentUser.uid)
       : (auth.currentUser && l.sellerId === auth.currentUser.uid);
-    return matchesSearch && matchesView;
+    
+    // Advanced Filters
+    const matchesCropType = filters.cropType ? l.title.toLowerCase().includes(filters.cropType.toLowerCase()) : true;
+    const matchesLocation = filters.location ? l.location.toLowerCase().includes(filters.location.toLowerCase()) : true;
+    const matchesMinPrice = filters.minPrice ? l.price >= parseFloat(filters.minPrice) : true;
+    const matchesMaxPrice = filters.maxPrice ? l.price <= parseFloat(filters.maxPrice) : true;
+    const matchesRating = filters.minRating > 0 ? (l.sellerRating || 0) >= filters.minRating : true;
+
+    return matchesSearch && matchesView && matchesCropType && matchesLocation && matchesMinPrice && matchesMaxPrice && matchesRating;
   });
+
+  const sellerListings = selectedSeller ? listings.filter(l => l.sellerId === selectedSeller.id) : [];
 
   const speakListing = async (listing: CropListing) => {
     if (isSpeaking === listing.id) {
@@ -237,6 +261,221 @@ const Marketplace: React.FC<MarketplaceProps> = ({ onBack, onToggleVoiceAssistan
         </div>
       </header>
 
+      {selectedSeller ? (
+        <div className="flex-1 overflow-y-auto bg-slate-50">
+          <div className="bg-white border-b border-slate-100 p-6 mb-4">
+            <button 
+              onClick={() => setSelectedSeller(null)}
+              className="flex items-center gap-2 text-sm text-slate-500 hover:text-purple-600 mb-6 transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" /> Back to Marketplace
+            </button>
+            <div className="flex items-start gap-4">
+              <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 border-2 border-white shadow-md flex items-center justify-center text-purple-600">
+                <User className="w-8 h-8" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                  {selectedSeller.name}
+                  {selectedSeller.verified && <BadgeCheck className="w-6 h-6 text-blue-500" />}
+                </h2>
+                <div className="flex items-center gap-4 mt-2 text-sm text-slate-600">
+                  <div className="flex items-center gap-1">
+                    <Star className="w-4 h-4 text-amber-500 fill-current" />
+                    <span className="font-bold text-slate-800">{selectedSeller.rating}</span>
+                    <span>Seller Rating</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <ShoppingBag className="w-4 h-4 text-slate-400" />
+                    <span className="font-bold text-slate-800">{sellerListings.length}</span>
+                    <span>Active Listings</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="p-4">
+            <h3 className="text-lg font-bold text-slate-800 mb-4 px-2">Active Listings from {selectedSeller.name}</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {sellerListings.map((listing, idx) => (
+                <motion.div
+                  key={listing.id}
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  transition={{ delay: idx * 0.05 }}
+                  className="bg-white rounded-2xl shadow-sm border border-slate-100/60 overflow-hidden hover:shadow-xl hover:shadow-purple-900/5 transition-all group flex flex-col"
+                >
+                  <div className="aspect-[16/10] bg-slate-100 relative overflow-hidden">
+                    <img
+                      src={listing.imageUrl || `https://source.unsplash.com/400x250/?${encodeURIComponent(listing.title)},agriculture,crop`}
+                      alt={listing.title}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                      referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = `https://picsum.photos/seed/${listing.title}/400/250`;
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                    <div className="absolute top-3 right-3 px-2.5 py-1 bg-white/95 backdrop-blur-md rounded-lg text-xs font-black text-purple-700 shadow-lg shadow-black/5">
+                      ₹{listing.price}/{listing.unit}
+                    </div>
+                  </div>
+                  <div className="p-5 flex-1 flex flex-col">
+                    <div className="flex items-center justify-between mb-2">
+                      <h3 className="text-lg font-bold text-slate-800 font-display tracking-tight">{listing.title}</h3>
+                      <div className="flex items-center text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-1 rounded-md">
+                        <Calendar className="w-3 h-3 mr-1" />
+                        {listing.createdAt?.toDate().toLocaleDateString() || 'Just now'}
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-500 mb-4 line-clamp-2 flex-1 leading-relaxed">{listing.description}</p>
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-100/60">
+                      <div className="flex items-center gap-2.5">
+                        <button
+                          onClick={() => speakListing(listing)}
+                          className={`p-2 rounded-xl transition-all ${
+                            isSpeaking === listing.id 
+                              ? 'bg-purple-600 text-white animate-pulse shadow-md shadow-purple-600/20' 
+                              : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+                          }`}
+                          title="Listen to details"
+                        >
+                          <Volume2 className="w-4 h-4" />
+                        </button>
+                        <div className="flex items-center text-[10px] font-medium text-slate-500">
+                          <MapPin className="w-3 h-3 mr-0.5 text-slate-400" /> {listing.location}
+                        </div>
+                      </div>
+                      {viewMode === 'buyer' && (!auth.currentUser || listing.sellerId !== auth.currentUser.uid) ? (
+                        <button className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-500 transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 hover:-translate-y-0.5">
+                          Buy Now <ArrowRight className="w-3.5 h-3.5" />
+                        </button>
+                      ) : (
+                        <div className="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" /> Active
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            {sellerListings.length === 0 && (
+              <div className="text-center py-12 text-slate-500">
+                <ShoppingBag className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                <p>No active listings found for this seller.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Search and Filters */}
+          <div className="bg-white border-b border-slate-100 p-4 shrink-0">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search crops, locations..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
+              />
+            </div>
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`p-2 rounded-xl border transition-colors flex items-center gap-2 ${
+                showFilters || Object.values(filters).some(v => v) 
+                  ? 'bg-purple-50 border-purple-200 text-purple-600' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <span className="text-xs font-bold hidden sm:inline">Filters</span>
+            </button>
+          </div>
+
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="pt-3 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Crop Type</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Wheat"
+                      value={filters.cropType}
+                      onChange={(e) => setFilters({ ...filters, cropType: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Location</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Punjab"
+                      value={filters.location}
+                      onChange={(e) => setFilters({ ...filters, location: e.target.value })}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Min Price</label>
+                      <input
+                        type="number"
+                        placeholder="0"
+                        value={filters.minPrice}
+                        onChange={(e) => setFilters({ ...filters, minPrice: e.target.value })}
+                        className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Max Price</label>
+                      <input
+                        type="number"
+                        placeholder="Any"
+                        value={filters.maxPrice}
+                        onChange={(e) => setFilters({ ...filters, maxPrice: e.target.value })}
+                        className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Min Rating</label>
+                    <select
+                      value={filters.minRating}
+                      onChange={(e) => setFilters({ ...filters, minRating: Number(e.target.value) })}
+                      className="w-full p-2 bg-white border border-slate-200 rounded-lg text-xs focus:ring-2 focus:ring-purple-500 outline-none"
+                    >
+                      <option value={0}>Any Rating</option>
+                      <option value={4}>4+ Stars</option>
+                      <option value={4.5}>4.5+ Stars</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="pt-3 flex justify-end">
+                  <button
+                    onClick={() => setFilters({ cropType: '', location: '', minPrice: '', maxPrice: '', minRating: 0 })}
+                    className="text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors"
+                  >
+                    Clear Filters
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredListings.map((listing, idx) => (
@@ -273,28 +512,41 @@ const Marketplace: React.FC<MarketplaceProps> = ({ onBack, onToggleVoiceAssistan
                 </div>
                 <p className="text-sm text-slate-500 mb-4 line-clamp-2 flex-1 leading-relaxed">{listing.description}</p>
                 <div className="flex items-center justify-between pt-4 border-t border-slate-100/60">
-                  <div className="flex items-center gap-2.5">
-                    <button
-                      onClick={() => speakListing(listing)}
-                      className={`p-2 rounded-xl transition-all ${
-                        isSpeaking === listing.id 
-                          ? 'bg-purple-600 text-white animate-pulse shadow-md shadow-purple-600/20' 
-                          : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
-                      }`}
-                      title="Listen to details"
-                    >
-                      <Volume2 className="w-4 h-4" />
-                    </button>
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 flex items-center justify-center text-slate-500 shadow-sm">
-                      <User className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold text-slate-800 leading-none mb-0.5">{listing.sellerName}</p>
-                      <div className="flex items-center text-[10px] font-medium text-slate-500">
-                        <MapPin className="w-3 h-3 mr-0.5 text-slate-400" /> {listing.location}
+                    <div className="flex items-center gap-2.5">
+                      <button
+                        onClick={() => speakListing(listing)}
+                        className={`p-2 rounded-xl transition-all ${
+                          isSpeaking === listing.id 
+                            ? 'bg-purple-600 text-white animate-pulse shadow-md shadow-purple-600/20' 
+                            : 'bg-purple-50 text-purple-600 hover:bg-purple-100'
+                        }`}
+                        title="Listen to details"
+                      >
+                        <Volume2 className="w-4 h-4" />
+                      </button>
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-100 to-slate-200 border border-slate-200 flex items-center justify-center text-slate-500 shadow-sm">
+                        <User className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <button 
+                          onClick={() => setSelectedSeller({ id: listing.sellerId, name: listing.sellerName, rating: listing.sellerRating || 0, verified: !!listing.isVerifiedSeller })}
+                          className="text-xs font-bold text-slate-800 leading-none mb-0.5 hover:text-purple-600 transition-colors flex items-center gap-1 text-left"
+                        >
+                          {listing.sellerName}
+                          {listing.isVerifiedSeller && <BadgeCheck className="w-3 h-3 text-blue-500" />}
+                        </button>
+                        <div className="flex items-center text-[10px] font-medium text-slate-500 gap-2">
+                          <span className="flex items-center">
+                            <MapPin className="w-3 h-3 mr-0.5 text-slate-400" /> {listing.location}
+                          </span>
+                          {listing.sellerRating && (
+                            <span className="flex items-center text-amber-500">
+                              <Star className="w-3 h-3 mr-0.5 fill-current" /> {listing.sellerRating}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
                   {viewMode === 'buyer' ? (
                     <button className="px-4 py-2 bg-emerald-600 text-white text-xs font-bold rounded-xl hover:bg-emerald-500 transition-all shadow-md shadow-emerald-600/20 flex items-center gap-1.5 hover:-translate-y-0.5">
                       Buy Now <ArrowRight className="w-3.5 h-3.5" />
@@ -310,6 +562,8 @@ const Marketplace: React.FC<MarketplaceProps> = ({ onBack, onToggleVoiceAssistan
           ))}
         </div>
       </div>
+      </>
+      )}
 
       <AnimatePresence>
         {showAddForm && (

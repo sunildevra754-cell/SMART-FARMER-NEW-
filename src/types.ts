@@ -9,6 +9,8 @@ export interface CropListing {
   sellerName: string;
   imageUrl?: string;
   createdAt: any;
+  sellerRating?: number;
+  isVerifiedSeller?: boolean;
 }
 
 export interface MandiPrice {
