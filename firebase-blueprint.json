@@ -1,0 +1,27 @@
+{
+  "entities": {
+    "listing": {
+      "title": "Crop Listing",
+      "description": "A crop listing in the marketplace.",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "The name of the crop." },
+        "description": { "type": "string", "description": "A description of the crop." },
+        "price": { "type": "number", "description": "The price of the crop." },
+        "unit": { "type": "string", "description": "The unit of the price (e.g., kg, quintal)." },
+        "location": { "type": "string", "description": "The location of the crop." },
+        "sellerId": { "type": "string", "description": "The ID of the seller." },
+        "sellerName": { "type": "string", "description": "The name of the seller." },
+        "imageUrl": { "type": "string", "description": "The URL of the crop image." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "The timestamp when the listing was created." }
+      },
+      "required": ["title", "description", "price", "unit", "location", "sellerId", "sellerName", "createdAt"]
+    }
+  },
+  "firestore": {
+    "listings": {
+      "schema": "listing",
+      "description": "A collection of crop listings."
+    }
+  }
+}

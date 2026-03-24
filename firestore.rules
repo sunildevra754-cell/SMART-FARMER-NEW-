@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isValidListing(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+             data.description is string && data.description.size() > 0 && data.description.size() < 1000 &&
+             data.price is number && data.price >= 0 &&
+             data.unit in ['kg', 'quintal', 'ton'] &&
+             data.location is string && data.location.size() > 0 && data.location.size() < 100 &&
+             data.sellerId == request.auth.uid &&
+             data.sellerName is string && data.sellerName.size() > 0 && data.sellerName.size() < 100;
+    }
+
+    match /listings/{listingId} {
+      allow read: if true; // Marketplace is public
+      allow create: if isAuthenticated() && isValidListing(request.resource.data);
+      allow update: if isAuthenticated() && isOwner(resource.data.sellerId) && isValidListing(request.resource.data);
+      allow delete: if isAuthenticated() && isOwner(resource.data.sellerId);
+    }
+  }
+}

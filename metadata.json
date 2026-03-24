@@ -1,0 +1,5 @@
+{
+  "name": "SMART FARMER: ONE TOUCH",
+  "description": "A comprehensive AI-powered agricultural platform for crop disease detection, live mandi prices, weather reports, and marketplace.",
+  "requestFramePermissions": ["camera", "geolocation", "microphone", "bluetooth", "usb"]
+}
